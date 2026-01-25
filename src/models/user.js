@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -15,18 +16,34 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+
     password: {
       type: String,
       required: [true, "Password is required"],
     },
+
     role: {
       type: String,
       enum: ["admin", "inspector", "viewer"],
       default: "viewer",
     },
+
+    // 🔐 Forgot Password (OTP based)
+    resetOtpHash: {
+      type: String,
+    },
+
+    resetOtpExpire: {
+      type: Date,
+    },
+
+    isResetOtpVerified: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
-    timestamps: true, 
+    timestamps: true,
   }
 );
 

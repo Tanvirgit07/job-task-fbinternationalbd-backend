@@ -1,125 +1,99 @@
-const handleError = require("../config/handelError");
 const User = require("../models/user");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+const handleError = require("../config/handelError");
 
-const createUser = async (req, res, next) => {
+// 1️⃣ Get All Users with Pagination, Search, Filter
+const getAllUsers = async (req, res, next) => {
   try {
-    const { username, email, password, role } = req.body;
+    // Query params
+    let { page = 1, limit = 10, search = "", role } = req.query;
+    page = parseInt(page);
+    limit = parseInt(limit);
 
-    // 1️⃣ Validate input
-    if (!username) {
-      return res.status(400).json({
-        success: false,
-        message: "Username is required",
-      });
+    // Build query object
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+      ];
     }
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
+    if (role) {
+      query.role = role;
     }
 
-    if (!password) {
-      return res.status(400).json({
-        success: false,
-        message: "Password is required",
-      });
-    }
+    // Count total matching documents
+    const total = await User.countDocuments(query);
 
-    // 2️⃣ Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: "A user with this email already exists",
-      });
-    }
-
-    // 3️⃣ Hash the password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // 4️⃣ Create new user
-    const newUser = await User.create({
-      username,
-      email,
-      password: hashedPassword,
-      role, // optional, default is 'viewer'
-    });
-
-    // 5️⃣ Send response (without password)
-    const { password: pw, ...userData } = newUser.toObject();
-
-    res.status(201).json({
-      success: true,
-      message: `User '${username}' created successfully`,
-      data: userData,
-    });
-  } catch (err) {
-    next(handleError(500, err.message)); // centralized error handler handle করবে
-  }
-};
-
-const loginUser = async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
-
-    // 1️⃣ Validate input
-    if (!email)
-      return res.status(400).json({ success: false, message: "Email is required" });
-    if (!password)
-      return res.status(400).json({ success: false, message: "Password is required" });
-
-    // 2️⃣ Check if user exists
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(401).json({ success: false, message: "Invalid email or password" });
-
-    // 3️⃣ Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(401).json({ success: false, message: "Invalid email or password" });
-
-    // 4️⃣ Generate Tokens
-    const payload = { id: user._id, role: user.role };
-
-    // Short-lived Access Token
-    const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {
-      expiresIn: "15m", // 15 minutes
-    });
-
-    // Long-lived Refresh Token
-    const refreshToken = jwt.sign({ id: user._id }, process.env.REFRESH_TOKEN_SECRET, {
-      expiresIn: "7d", // 7 days
-    });
-
-    // 5️⃣ Send user data (without password)
-    const userData = {
-      id: user._id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    // Fetch users with pagination
+    const users = await User.find(query)
+      .select("-password")
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
-      message: "Login successful",
-      accessToken,
-      refreshToken, // <-- added
-      user: userData,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: users,
     });
   } catch (err) {
-    next(err); // centralized error handler
+    next(handleError(500, err.message));
   }
 };
 
+// 2️⃣ Get Single User
+const getSingleUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).select("-password"); // password hide
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (err) {
+    next(handleError(500, err.message));
+  }
+};
+
+// 3️⃣ Delete User
+const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    await user.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (err) {
+    next(handleError(500, err.message));
+  }
+};
 
 module.exports = {
-  createUser,
-  loginUser,
+  getAllUsers,
+  getSingleUser,
+  deleteUser,
 };

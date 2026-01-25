@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const { userRouter } = require('./routes/userRouter');
+const { authRouter } = require('./routes/authRouter');
+const { ORSRouter } = require('./routes/ORSRouter');
 
 const app = express();
 
@@ -9,7 +11,10 @@ app.use(cors());
 app.use(express.json());
 
 
-app.use("/auth", userRouter);
+app.use("/auth", authRouter);
+app.use("/user", userRouter);
+
+
 
 app.get("/", (req, res) => {
   res.send("ORS Tracker API is running 🚗");
