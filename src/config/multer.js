@@ -1,30 +1,56 @@
-const multer = require("multer");
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 
-// Storage setup
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // all images will save inside /uploads folder
-  },
-  filename: function (req, file, cb) {
-    const uniqueName = `${Date.now()}-${file.originalname}`;
-    cb(null, uniqueName);
-  },
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// File filter (only images allowed)
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image")) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only image files are allowed"), false);
+// Multer configuration - keep files in memory
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+const uploadMultiple = upload.array('attachments', 20);
+
+/**
+ * Upload files to Cloudinary
+ * @param {Array} files - Array of file objects from multer
+ * @param {String} folder - Cloudinary folder name
+ * @returns {Promise<Array>} Array of uploaded file metadata
+ */
+const uploadToCloudinary = async (files, folder = 'ors-reports') => {
+  if (!files || files.length === 0) {
+    return [];
   }
+
+  const uploadPromises = files.map((file) => {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: folder,
+          resource_type: 'auto',
+          public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve({
+              url: result.secure_url,
+              public_id: result.public_id,
+              originalName: file.originalname,
+              mimeType: file.mimetype,
+              size: file.size,
+            });
+          }
+        }
+      );
+      stream.end(file.buffer);
+    });
+  });
+
+  return Promise.all(uploadPromises);
 };
 
-// Multer instance
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max per image
-});
-
-module.exports = upload;
+module.exports = { uploadMultiple, uploadToCloudinary };

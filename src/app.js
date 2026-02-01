@@ -3,6 +3,7 @@ const cors = require('cors');
 const { userRouter } = require('./routes/userRouter');
 const { authRouter } = require('./routes/authRouter');
 const { ORSRouter } = require('./routes/ORSRouter');
+const OrsRouter = require('./routes/ORSRouter');
 
 const app = express();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 
 app.use("/auth", authRouter);
 app.use("/user", userRouter);
+app.use('/ors', OrsRouter)
 
 
 
